@@ -1,0 +1,51 @@
+#!/bin/bash
+
+check_tools() {
+    required_tools=("kubectl" "flux" "jq")
+    for tool in ${required_tools[@]}; do
+        if ! command -v ${tool} &> /dev/null
+        then
+            echo "${tool} must be installed and in your PATH"
+            exit
+        fi
+    done
+}
+
+install_flux() {
+    kubectl apply -f https://github.com/fluxcd/flux2/releases/latest/download/install.yaml
+    echo "Waiting for Flux deployments to become available"
+    kubectl wait --for=condition=available --timeout 600s deployment/helm-controller -n flux-system
+    kubectl wait --for=condition=available --timeout 600s deployment/image-automation-controller -n flux-system
+    kubectl wait --for=condition=available --timeout 600s deployment/image-reflector-controller -n flux-system
+    kubectl wait --for=condition=available --timeout 600s deployment/kustomize-controller -n flux-system
+    kubectl wait --for=condition=available --timeout 600s deployment/notification-controller -n flux-system
+    kubectl wait --for=condition=available --timeout 600s deployment/source-controller -n flux-system
+}
+
+install_k3s() {
+    curl -sfL https://get.k3s.io | sh -
+    mkdir -p ~/.kube
+    sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+}
+
+uninstall_k3s() {
+    k3s-uninstall.sh
+}
+
+up_or_down() {
+    if [[ $1 = "up" ]]
+    then
+        echo "Bringing sample stack up"
+        check_tools
+        install_k3s
+        install_flux
+    elif [[ $1 = "down" ]]
+    then
+        echo "Bringing sample stack down"
+        uninstall_k3s
+    else
+        echo "$1 is not a valid option"
+    fi
+}
+
+up_or_down $1
